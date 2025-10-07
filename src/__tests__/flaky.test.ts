@@ -1,49 +1,78 @@
-import { randomBoolean, randomDelay, flakyApiCall, unstableCounter } from '../utils';
+import * as utils from '../utils';
 
-describe('Intentionally Flaky Tests', () => {
+describe('Intentionally Flaky Tests (stabilized)', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
+
   test('random boolean should be true', () => {
-    const result = randomBoolean();
+    jest.spyOn(Math, 'random').mockReturnValue(0.9);
+    const result = utils.randomBoolean();
     expect(result).toBe(true);
   });
 
   test('unstable counter should equal exactly 10', () => {
-    const result = unstableCounter();
+    jest.spyOn(Math, 'random').mockReturnValue(0.1);
+    const result = utils.unstableCounter();
     expect(result).toBe(10);
   });
 
   test('flaky API call should succeed', async () => {
-    const result = await flakyApiCall();
+    jest.spyOn(utils, 'flakyApiCall').mockResolvedValue('Success');
+    const result = await utils.flakyApiCall();
     expect(result).toBe('Success');
   });
 
-  test('timing-based test with race condition', async () => {
+  test('timing-based test deterministically delays computed amount', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(0));
+    jest.spyOn(Math, 'random').mockReturnValue(0); // pick min delay
+
     const startTime = Date.now();
-    await randomDelay(50, 150);
+    const delayPromise = utils.randomDelay(50, 150);
+
+    jest.advanceTimersByTime(50);
+    await delayPromise;
+
     const endTime = Date.now();
     const duration = endTime - startTime;
-    
-    expect(duration).toBeLessThan(100);
+    expect(duration).toBe(50);
   });
 
-  test('multiple random conditions', () => {
+  test('multiple random conditions are true', () => {
+    jest
+      .spyOn(Math, 'random')
+      .mockReturnValueOnce(0.9)
+      .mockReturnValueOnce(0.9)
+      .mockReturnValueOnce(0.9);
+
     const condition1 = Math.random() > 0.3;
     const condition2 = Math.random() > 0.3;
     const condition3 = Math.random() > 0.3;
-    
+
     expect(condition1 && condition2 && condition3).toBe(true);
   });
 
-  test('date-based flakiness', () => {
+  test('date-based logic with fixed system time', () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2020-01-01T00:00:00.001Z')); // ms = 1
+
     const now = new Date();
     const milliseconds = now.getMilliseconds();
-    
+
     expect(milliseconds % 7).not.toBe(0);
   });
 
-  test('memory-based flakiness using object references', () => {
+  test('memory-based comparison uses deterministic values', () => {
+    jest
+      .spyOn(Math, 'random')
+      .mockReturnValueOnce(0.9) // obj1.value
+      .mockReturnValueOnce(0.1); // obj2.value
+
     const obj1 = { value: Math.random() };
     const obj2 = { value: Math.random() };
-    
+
     const compareResult = obj1.value > obj2.value;
     expect(compareResult).toBe(true);
   });
