@@ -1,4 +1,4 @@
-# Project
+# rule-repo
 
 This is a simple project repository.
 
