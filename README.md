@@ -1,1 +1,3 @@
-# rule-repo
+# Project
+
+This is a simple project repository.
