@@ -4,20 +4,24 @@ orbs:
 jobs:
   build-node:
     # Build node project
-    executor: node/default
+    executor:
+      name: node/default
+      tag: '20.18'  # Use specific Node version for consistency
+    resource_class: medium  # Explicit resource class
     steps:
       - checkout
       - node/install-packages:
           pkg-manager: npm
+          cache-path: ~/.npm
+          override-ci-command: npm ci  # Use npm ci for faster, cleaner installs
       - run:
+          name: Build project
           command: npm run build
       - run:
-          name: Create the ~/artifacts directory if it doesn't exist
-          command: mkdir -p ~/artifacts
-      # Copy output to artifacts dir
-      - run:
           name: Copy artifacts
-          command: cp -R build dist public .output .next .docusaurus ~/artifacts 2>/dev/null || true
+          command: |
+            mkdir -p ~/artifacts
+            cp -R dist ~/artifacts 2>/dev/null || true
       - store_artifacts:
           path: ~/artifacts
           destination: node-build
