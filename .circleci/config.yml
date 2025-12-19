@@ -1,27 +1,150 @@
 version: 2.1
+
 orbs:
   node: circleci/node@7
-jobs:
-  build-node:
-    # Build node project
-    executor: node/default
+
+# Reusable command for dependency setup with caching
+commands:
+  setup-dependencies:
+    description: "Checkout code and install dependencies with caching"
     steps:
       - checkout
       - node/install-packages:
           pkg-manager: npm
+          cache-version: v1
+
+  copy-build-artifacts:
+    description: "Copy build outputs to artifacts directory"
+    steps:
       - run:
-          command: npm run build
-      - run:
-          name: Create the ~/artifacts directory if it doesn't exist
+          name: Create artifacts directory
           command: mkdir -p ~/artifacts
-      # Copy output to artifacts dir
       - run:
-          name: Copy artifacts
-          command: cp -R build dist public .output .next .docusaurus ~/artifacts 2>/dev/null || true
+          name: Copy build artifacts
+          command: |
+            for dir in build dist public .output .next .docusaurus; do
+              if [ -d "$dir" ]; then
+                echo "Copying $dir to artifacts..."
+                cp -R "$dir" ~/artifacts/
+              else
+                echo "Skipping $dir (not found)"
+              fi
+            done
+      - persist_to_workspace:
+          root: ~/artifacts
+          paths:
+            - "*"
       - store_artifacts:
           path: ~/artifacts
           destination: node-build
+
+# Explicit executor definition with resource class
+executors:
+  node-executor:
+    docker:
+      - image: cimg/node:lts
+    resource_class: medium
+
+jobs:
+  # Install dependencies (runs once, shared via workspace)
+  install-deps:
+    executor: node-executor
+    steps:
+      - checkout
+      - node/install-packages:
+          pkg-manager: npm
+          cache-version: v1
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+
+  # Lint job (fails fast on code quality issues)
+  lint:
+    executor: node-executor
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Run linter
+          command: |
+            # Check if lint script exists, otherwise skip
+            if npm run | grep -q "lint"; then
+              npm run lint
+            else
+              echo "No lint script found - skipping"
+            fi
+
+  # Test job with result storage for future test splitting
+  test:
+    executor: node-executor
+    # TODO: Add parallelism after analyzing test suite size
+    # parallelism: 4
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Run tests
+          command: |
+            # Check if test script exists, otherwise skip
+            if npm run | grep -q "test"; then
+              mkdir -p test-results
+              npm test
+            else
+              echo "No test script found - skipping"
+            fi
+      - store_test_results:
+          path: test-results
+
+  # Build job
+  build-node:
+    # Build node project
+    executor: node-executor
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Build project
+          command: npm run build
+      - copy-build-artifacts
+
+  # TODO: Add deployment job with branch filtering
+  # deploy:
+  #   executor: node-executor
+  #   steps:
+  #     - attach_workspace:
+  #         at: .
+  #     - attach_workspace:
+  #         at: ~/artifacts
+  #     - run:
+  #           name: Deploy application
+  #           command: echo "Add deployment commands here"
+
 workflows:
-  build:
+  build-and-test:
     jobs:
-      - build-node
+      # Install dependencies once, share with all jobs
+      - install-deps
+
+      # Run lint, test, and build in parallel (all depend on install-deps)
+      - lint:
+          requires:
+            - install-deps
+
+      - test:
+          requires:
+            - install-deps
+
+      - build-node:
+          requires:
+            - install-deps
+
+      # TODO: Add deploy job that requires lint, test, and build
+      # - deploy:
+      #     requires:
+      #       - lint
+      #       - test
+      #       - build-node
+      #     filters:
+      #       branches:
+      #         only: main
