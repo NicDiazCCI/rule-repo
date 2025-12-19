@@ -1,10 +1,16 @@
 version: 2.1
 orbs:
-  node: circleci/node@7
+  node: circleci/node@7.0  # Pinned to minor version for stability
+executors:
+  custom-node:
+    docker:
+      - image: cimg/node:lts
+    # TODO: Test with resource_class: small for potential 50% cost reduction
+
 jobs:
   build-node:
     # Build node project
-    executor: node/default
+    executor: custom-node
     steps:
       - checkout
       - node/install-packages:
@@ -12,15 +18,19 @@ jobs:
       - run:
           command: npm run build
       - run:
-          name: Create the ~/artifacts directory if it doesn't exist
-          command: mkdir -p ~/artifacts
-      # Copy output to artifacts dir
-      - run:
-          name: Copy artifacts
-          command: cp -R build dist public .output .next .docusaurus ~/artifacts 2>/dev/null || true
+          name: Copy build artifacts
+          command: |
+            mkdir -p ~/artifacts
+            # TypeScript outputs to dist/ directory per tsconfig.json
+            if [ -d "dist" ]; then cp -R dist ~/artifacts/; fi
       - store_artifacts:
           path: ~/artifacts
           destination: node-build
+      # TODO: If adding downstream jobs that need build output, use persist_to_workspace
+      # - persist_to_workspace:
+      #     root: .
+      #     paths:
+      #       - dist
 workflows:
   build:
     jobs:
