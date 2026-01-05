@@ -4,9 +4,12 @@ orbs:
 jobs:
   build-node:
     # Build node project
+    # TODO: Specify resource_class for more predictable resource allocation (e.g., medium, large)
     executor: node/default
     steps:
       - checkout
+      # The node/install-packages command handles dependency caching internally
+      # Cache key: v1-deps-{{ arch }}-{{ .Branch }}-{{ checksum "package-lock.json" }}
       - node/install-packages:
           pkg-manager: npm
       - run:
@@ -15,13 +18,27 @@ jobs:
           name: Create the ~/artifacts directory if it doesn't exist
           command: mkdir -p ~/artifacts
       # Copy output to artifacts dir
+      # TODO: Simplify to match actual project output directory once identified
       - run:
           name: Copy artifacts
           command: cp -R build dist public .output .next .docusaurus ~/artifacts 2>/dev/null || true
       - store_artifacts:
           path: ~/artifacts
           destination: node-build
+      # TODO: Add persist_to_workspace if downstream jobs are added
+      # - persist_to_workspace:
+      #     root: ~/artifacts
+      #     paths:
+      #       - .
 workflows:
   build:
     jobs:
       - build-node
+    # TODO: Consider expanding workflow to include separate lint/test jobs for parallelization
+    # Example structure:
+    # jobs:
+    #   - build-node
+    #   - lint:
+    #       requires: [build-node]
+    #   - test:
+    #       requires: [build-node]
