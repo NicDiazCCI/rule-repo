@@ -1,26 +1,49 @@
 version: 2.1
 orbs:
   node: circleci/node@7
+
+commands:
+  setup-deps:
+    description: "Checkout code and install dependencies with caching"
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-deps-{{ checksum "package-lock.json" }}
+            - v1-deps-
+      - run:
+          name: Install dependencies
+          command: npm install
+      - save_cache:
+          key: v1-deps-{{ checksum "package-lock.json" }}
+          paths:
+            - node_modules
+
 jobs:
   build-node:
     # Build node project
+    # TODO: Specify resource_class for more predictable resource allocation
     executor: node/default
     steps:
-      - checkout
-      - node/install-packages:
-          pkg-manager: npm
+      - setup-deps
       - run:
+          name: Build project
           command: npm run build
       - run:
           name: Create the ~/artifacts directory if it doesn't exist
           command: mkdir -p ~/artifacts
-      # Copy output to artifacts dir
+      # Copy output to artifacts dir (TypeScript outputs to dist/)
       - run:
           name: Copy artifacts
-          command: cp -R build dist public .output .next .docusaurus ~/artifacts 2>/dev/null || true
+          command: cp -R dist ~/artifacts 2>/dev/null || true
       - store_artifacts:
           path: ~/artifacts
           destination: node-build
+      - persist_to_workspace:
+          root: ~/artifacts
+          paths:
+            - .
+
 workflows:
   build:
     jobs:
