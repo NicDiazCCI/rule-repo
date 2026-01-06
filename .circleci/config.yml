@@ -5,6 +5,7 @@ jobs:
   build-node:
     # Build node project
     executor: node/default
+    # resource_class should be specified for predictable resource allocation
     steps:
       - checkout
       - node/install-packages:
