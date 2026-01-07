@@ -4,6 +4,7 @@ orbs:
 jobs:
   build-node:
     executor: node/default
+    # specify resource_class for predictable resource allocation
     steps:
       - checkout
       - node/install-packages:
@@ -19,24 +20,31 @@ jobs:
       - store_artifacts:
           path: ~/artifacts
           destination: node-build
+      - persist_to_workspace:
+          root: ~/
+          paths:
+            - project/node_modules
+            - artifacts
   unit-tests:
     executor: node/default
+    # specify resource_class for predictable resource allocation
+    parallelism: 2
     steps:
       - checkout
-      - node/install-packages:
-          pkg-manager: npm
+      - attach_workspace:
+          at: ~/
       - run:
           name: Run tests
           command: |
             mkdir -p test-results
             TEST_FILES=$(circleci tests glob "src/**/*.{test,spec}.{js,ts}")
-            echo "$TEST_FILES" | circleci tests run --command="xargs npm run test:run -- --reporter=junit --outputFile=test-results/junit.xml" --verbose
+            echo "$TEST_FILES" | circleci tests run --command="xargs npm run test:run -- --reporter=junit --outputFile=test-results/junit.xml" --verbose --split-by=timings --timings-type=name
       - store_test_results:
           path: test-results
 workflows:
-  build:
+  build-and-test:
     jobs:
       - build-node
-  test:
-    jobs:
-      - unit-tests
+      - unit-tests:
+          requires:
+            - build-node
