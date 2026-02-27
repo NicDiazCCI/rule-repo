@@ -33,12 +33,6 @@ jobs:
             echo "$TEST_FILES" | circleci tests run --command="xargs npm run test:run -- --reporter=junit --outputFile=test-results/junit.xml" --verbose
       - store_test_results:
           path: test-results
-  intentional-failure:
-    executor: node/default
-    steps:
-      - run:
-          name: Intentional failure for testing
-          command: exit 1
 workflows:
   build:
     jobs:
