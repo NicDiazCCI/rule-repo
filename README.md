@@ -25,19 +25,6 @@ This library provides the following utility functions:
 npm install
 ```
 
-## Usage
-
-```typescript
-import { add, capitalize, isPalindrome } from './src/utils';
-
-// Mathematical operations
-console.log(add(5, 3)); // 8
-
-// String manipulation
-console.log(capitalize('hello')); // 'Hello'
-console.log(isPalindrome('Madam')); // true
-```
-
 ## Development
 
 ### Build
