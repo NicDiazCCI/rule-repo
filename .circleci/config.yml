@@ -1,49 +1,110 @@
 version: 2.1
+
 orbs:
   node: circleci/node@7
+
+executors:
+  node-executor:
+    docker:
+      - image: cimg/node:lts
+    resource_class: medium
+
 jobs:
-  build-node:
-    executor: node/default
+  install-dependencies:
+    executor: node-executor
     steps:
       - checkout
-      - node/install-packages:
-          pkg-manager: npm
+      - restore_cache:
+          keys:
+            - node-deps-v1-{{ checksum "package-lock.json" }}
+            - node-deps-v1-
       - run:
-          command: npm run build
-      - run:
-          name: Create the ~/artifacts directory if it doesn't exist
-          command: mkdir -p ~/artifacts
-      - run:
-          name: Copy artifacts
-          command: cp -R build dist public .output .next .docusaurus ~/artifacts 2>/dev/null || true
-      - store_artifacts:
-          path: ~/artifacts
-          destination: node-build
-  unit-tests:
-    executor: node/default
+          name: Install dependencies
+          command: npm ci
+      - save_cache:
+          key: node-deps-v1-{{ checksum "package-lock.json" }}
+          paths:
+            - node_modules
+      - persist_to_workspace:
+          root: .
+          paths:
+            - node_modules
+
+  test:
+    executor: node-executor
     steps:
       - checkout
-      - node/install-packages:
-          pkg-manager: npm
+      - attach_workspace:
+          at: .
       - run:
           name: Run tests
-          command: |
-            mkdir -p test-results
-            TEST_FILES=$(circleci tests glob "src/**/*.{test,spec}.{js,ts}")
-            echo "$TEST_FILES" | circleci tests run --command="xargs npm run test:run -- --reporter=junit --outputFile=test-results/junit.xml" --verbose
+          command: npm run test -- --ci --coverage
       - store_test_results:
           path: test-results
-  intentional-failure:
-    executor: node/default
-    steps:
-      - run:
-          name: Intentional failure for testing
-          command: exit 1
-workflows:
+      - store_artifacts:
+          path: test-results
+          destination: test-results
+      - store_artifacts:
+          path: coverage
+          destination: coverage
+
   build:
+    executor: node-executor
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: Build TypeScript
+          command: npm run build
+      - run:
+          name: Create artifacts directory
+          command: mkdir -p ~/artifacts
+      - run:
+          name: Copy build artifacts
+          command: cp -R dist ~/artifacts/ 2>/dev/null || true
+      - store_artifacts:
+          path: ~/artifacts
+          destination: build-artifacts
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist
+
+  # Uncomment and configure this job to add deployment
+  # deploy:
+  #   executor: node-executor
+  #   steps:
+  #     - checkout
+  #     - attach_workspace:
+  #         at: .
+  #     - run:
+  #         name: Deploy application
+  #         command: |
+  #           # Add your deployment commands here
+  #           # Examples:
+  #           # - Deploy to AWS: aws s3 sync dist/ s3://your-bucket/
+  #           # - Deploy to Heroku: git push heroku main
+  #           # - Deploy to Vercel: vercel --prod --token $VERCEL_TOKEN
+  #           # - Deploy to Netlify: netlify deploy --prod --dir=dist
+  #           echo "Configure deployment commands"
+
+workflows:
+  version: 2
+  ci-workflow:
     jobs:
-      - build-node
-  test:
-    jobs:
-      - unit-tests
-      - intentional-failure
+      - install-dependencies
+      - test:
+          requires:
+            - install-dependencies
+      - build:
+          requires:
+            - install-dependencies
+      # Uncomment to enable deployment on main branch
+      # - deploy:
+      #     requires:
+      #       - test
+      #       - build
+      #     filters:
+      #       branches:
+      #         only: main
