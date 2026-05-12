@@ -46,4 +46,3 @@ workflows:
   test:
     jobs:
       - unit-tests
-      - intentional-failure
